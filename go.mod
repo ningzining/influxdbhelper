@@ -1,4 +1,4 @@
-module influxdbhelper
+module github.com/ningzining/influxdbhelper
 
 go 1.20
 
