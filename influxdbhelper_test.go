@@ -20,7 +20,7 @@ func TestInfluxDBClient_Write(t *testing.T) {
 		Org:    org,
 		Bucket: bucket,
 	}
-	client := NewClient(config)
+	client := Client(config)
 	year, month, day := time.Now().Date()
 	date := time.Date(year, month, day, 8, 0, 0, 0, time.Local)
 	floatValue := 20.33
@@ -38,7 +38,7 @@ func TestInfluxDBClient_Query(t *testing.T) {
 		Org:    org,
 		Bucket: bucket,
 	}
-	client := NewClient(config)
+	client := Client(config)
 
 	year, month, day := time.Now().Date()
 	startTime := time.Date(year, month, day, 0, 0, 0, 0, time.Local)

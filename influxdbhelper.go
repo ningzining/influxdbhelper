@@ -12,15 +12,14 @@ import (
 )
 
 type InfluxDBClient struct {
+	Config    *InfluxDBConfig
 	Client    influxdb2.Client
-	Org       string
-	Bucket    string
-	Point     *write.Point
 	Writer    api.WriteAPI
 	Querier   api.QueryAPI
 	QueryFlux strings.Builder
 	Err       error
 	IsDebug   bool
+	clone     int
 }
 
 type InfluxDBConfig struct {
@@ -30,83 +29,93 @@ type InfluxDBConfig struct {
 	Bucket string
 }
 
-func NewClient(config *InfluxDBConfig) InfluxDBClient {
+func Client(config *InfluxDBConfig) *InfluxDBClient {
 	client := influxdb2.NewClient(config.Url, config.Token)
 	writer := client.WriteAPI(config.Org, config.Bucket)
 	query := client.QueryAPI(config.Org)
-	influxdb := InfluxDBClient{
+	influxdb := &InfluxDBClient{
+		Config:  config,
 		Client:  client,
-		Org:     config.Org,
-		Bucket:  config.Bucket,
 		Writer:  writer,
 		Querier: query,
+		clone:   1,
 	}
 	return influxdb
 }
 
 func (i *InfluxDBClient) Error() error {
-	return i.Err
+	client := i.getInstance()
+	return client.Err
 }
 
 func (i *InfluxDBClient) Debug() *InfluxDBClient {
-	i.IsDebug = true
-	return i
+	client := i.getInstance()
+	client.IsDebug = true
+	return client
 }
 
 func (i *InfluxDBClient) Write(measurement string, tags map[string]string, fields map[string]interface{}, ts time.Time) *InfluxDBClient {
+	client := i.getInstance()
 	point := influxdb2.NewPoint(measurement, tags, fields, ts)
-	i.Writer.WritePoint(point)
-	return i
+	client.Writer.WritePoint(point)
+	return client
 }
 
 func (i *InfluxDBClient) WritePoint(point *write.Point) *InfluxDBClient {
-	i.Writer.WritePoint(point)
-	return i
+	client := i.getInstance()
+	client.Writer.WritePoint(point)
+	return client
 }
 
 func (i *InfluxDBClient) Flush() {
-	i.Writer.Flush()
+	client := i.getInstance()
+	client.Writer.Flush()
 }
 
 func (i *InfluxDBClient) FromBucket(bucket string) *InfluxDBClient {
+	client := i.getInstance()
 	fromFlux := fmt.Sprintf("from(bucket: \"%s\")", bucket)
-	i.QueryFlux.WriteString(fromFlux)
-	return i
+	client.QueryFlux.WriteString(fromFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Range(timeFrom string, timeTo string) *InfluxDBClient {
+	client := i.getInstance()
 	timeFromParse, err := time.Parse(time.DateTime, timeFrom)
 	if err != nil {
-		i.Err = err
-		return i
+		client.Err = err
+		return client
 	}
 	timeToParse, err := time.Parse(time.DateTime, timeTo)
 	if err != nil {
-		i.Err = err
-		return i
+		client.Err = err
+		return client
 	}
 	start := timeFromParse.Format("2006-01-02T15:04:05+08:00")
 	end := timeToParse.Format("2006-01-02T15:04:05+08:00")
 	rangeFlux := fmt.Sprintf("|> range(start: %s ,stop: %s)", start, end)
-	i.QueryFlux.WriteString(rangeFlux)
-	return i
+	client.QueryFlux.WriteString(rangeFlux)
+	return client
 }
 
 func (i *InfluxDBClient) RangeRecent(rangeTime string) *InfluxDBClient {
+	client := i.getInstance()
 	rangeFlux := fmt.Sprintf("|> range(start: %s)", rangeTime)
-	i.QueryFlux.WriteString(rangeFlux)
-	return i
+	client.QueryFlux.WriteString(rangeFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Measurement(measurement string) *InfluxDBClient {
+	client := i.getInstance()
 	rangeFlux := fmt.Sprintf("|> filter(fn: (r) => r._measurement == \"%s\")", measurement)
-	i.QueryFlux.WriteString(rangeFlux)
-	return i
+	client.QueryFlux.WriteString(rangeFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Tag(tagKey string, tagValues ...string) *InfluxDBClient {
+	client := i.getInstance()
 	if len(tagValues) == 0 {
-		return i
+		return client
 	}
 	var filterTagsStr []string
 	for _, v := range tagValues {
@@ -115,13 +124,14 @@ func (i *InfluxDBClient) Tag(tagKey string, tagValues ...string) *InfluxDBClient
 	}
 	filterTag := strings.Join(filterTagsStr, " or ")
 	tagFlux := fmt.Sprintf("|> filter(fn: (r) => %s)", filterTag)
-	i.QueryFlux.WriteString(tagFlux)
-	return i
+	client.QueryFlux.WriteString(tagFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Field(fieldValues ...string) *InfluxDBClient {
+	client := i.getInstance()
 	if len(fieldValues) == 0 {
-		return i
+		return client
 	}
 	var filterTagsStr []string
 	for _, v := range fieldValues {
@@ -130,57 +140,65 @@ func (i *InfluxDBClient) Field(fieldValues ...string) *InfluxDBClient {
 	}
 	filterTag := strings.Join(filterTagsStr, " or ")
 	tagFlux := fmt.Sprintf("|> filter(fn: (r) => %s)", filterTag)
-	i.QueryFlux.WriteString(tagFlux)
-	return i
+	client.QueryFlux.WriteString(tagFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Filter(filter string) *InfluxDBClient {
+	client := i.getInstance()
 	filterFlux := fmt.Sprintf("|> filter(fn: (r) => %s)", filter)
-	i.QueryFlux.WriteString(filterFlux)
-	return i
+	client.QueryFlux.WriteString(filterFlux)
+	return client
 }
 
 // AggregateWindow fn: mean,first,last...
 func (i *InfluxDBClient) AggregateWindow(every string, fn string, createEmpty bool) *InfluxDBClient {
+	client := i.getInstance()
 	aggregateWindowFlux := fmt.Sprintf("|> aggregateWindow(every: %s, fn: %s, createEmpty: %t)", every, fn, createEmpty)
-	i.QueryFlux.WriteString(aggregateWindowFlux)
-	return i
+	client.QueryFlux.WriteString(aggregateWindowFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Limit(num int) *InfluxDBClient {
+	client := i.getInstance()
 	limitFlux := fmt.Sprintf("|> limit(n: %d)", num)
-	i.QueryFlux.WriteString(limitFlux)
-	return i
+	client.QueryFlux.WriteString(limitFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Fill(usePrevious bool) *InfluxDBClient {
+	client := i.getInstance()
 	fillFlux := fmt.Sprintf("|> fill(usePrevious: %t)", usePrevious)
-	i.QueryFlux.WriteString(fillFlux)
-	return i
+	client.QueryFlux.WriteString(fillFlux)
+	return client
 }
 
 func (i *InfluxDBClient) First() *InfluxDBClient {
+	client := i.getInstance()
 	firstFlux := fmt.Sprintf("|> first()")
-	i.QueryFlux.WriteString(firstFlux)
-	return i
+	client.QueryFlux.WriteString(firstFlux)
+	return client
 }
 
 func (i *InfluxDBClient) Last() *InfluxDBClient {
+	client := i.getInstance()
 	lastFlux := fmt.Sprintf("|> last()")
-	i.QueryFlux.WriteString(lastFlux)
-	return i
+	client.QueryFlux.WriteString(lastFlux)
+	return client
 }
 
 func (i *InfluxDBClient) QueryFluxAppend(flux string) *InfluxDBClient {
-	i.QueryFlux.WriteString(flux)
-	return i
+	client := i.getInstance()
+	client.QueryFlux.WriteString(flux)
+	return client
 }
 
 func (i *InfluxDBClient) Query() (result *api.QueryTableResult, err error) {
-	if i.IsDebug {
+	client := i.getInstance()
+	if client.IsDebug {
 		log.Printf("%s\n", i.QueryFlux.String())
 	}
-	result, err = i.Querier.Query(context.Background(), i.QueryFlux.String())
+	result, err = client.Querier.Query(context.Background(), client.QueryFlux.String())
 	if err != nil {
 		return
 	}
@@ -188,9 +206,26 @@ func (i *InfluxDBClient) Query() (result *api.QueryTableResult, err error) {
 }
 
 func (i *InfluxDBClient) QueryByCustomFlux(flux string) (result *api.QueryTableResult, err error) {
-	result, err = i.Querier.Query(context.Background(), flux)
+	client := i.getInstance()
+	result, err = client.Querier.Query(context.Background(), flux)
 	if err != nil {
 		return
 	}
 	return
+}
+
+func (i *InfluxDBClient) getInstance() *InfluxDBClient {
+	if i.clone > 0 {
+		client := influxdb2.NewClient(i.Config.Url, i.Config.Token)
+		writer := client.WriteAPI(i.Config.Org, i.Config.Bucket)
+		query := client.QueryAPI(i.Config.Org)
+		influxdb := &InfluxDBClient{
+			Client:  client,
+			Writer:  writer,
+			Querier: query,
+			clone:   0,
+		}
+		return influxdb
+	}
+	return i
 }
