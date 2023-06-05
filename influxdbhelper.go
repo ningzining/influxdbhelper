@@ -12,7 +12,7 @@ import (
 )
 
 type InfluxDBClient struct {
-	Config    *InfluxDBConfig
+	Config    InfluxDBConfig
 	Client    influxdb2.Client
 	Writer    api.WriteAPI
 	Querier   api.QueryAPI
@@ -29,7 +29,7 @@ type InfluxDBConfig struct {
 	Bucket string
 }
 
-func Client(config *InfluxDBConfig) *InfluxDBClient {
+func Client(config InfluxDBConfig) *InfluxDBClient {
 	client := influxdb2.NewClient(config.Url, config.Token)
 	writer := client.WriteAPI(config.Org, config.Bucket)
 	query := client.QueryAPI(config.Org)
@@ -220,6 +220,7 @@ func (i *InfluxDBClient) getInstance() *InfluxDBClient {
 		writer := client.WriteAPI(i.Config.Org, i.Config.Bucket)
 		query := client.QueryAPI(i.Config.Org)
 		influxdb := &InfluxDBClient{
+			Config:  i.Config,
 			Client:  client,
 			Writer:  writer,
 			Querier: query,

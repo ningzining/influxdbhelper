@@ -14,7 +14,7 @@ const (
 )
 
 func TestInfluxDBClient_Write(t *testing.T) {
-	config := &InfluxDBConfig{
+	config := InfluxDBConfig{
 		Url:    url,
 		Token:  token,
 		Org:    org,
@@ -32,7 +32,7 @@ func TestInfluxDBClient_Write(t *testing.T) {
 }
 
 func TestInfluxDBClient_Query(t *testing.T) {
-	config := &InfluxDBConfig{
+	config := InfluxDBConfig{
 		Url:    url,
 		Token:  token,
 		Org:    org,
