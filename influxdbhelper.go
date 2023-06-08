@@ -151,11 +151,31 @@ func (i *InfluxDBClient) Filter(filter string) *InfluxDBClient {
 	return client
 }
 
-// AggregateWindow fn: mean,first,last...
-func (i *InfluxDBClient) AggregateWindow(every string, fn string, createEmpty bool) *InfluxDBClient {
+func (i *InfluxDBClient) Group(columns []string, mode string) *InfluxDBClient {
 	client := i.getInstance()
-	aggregateWindowFlux := fmt.Sprintf("|> aggregateWindow(every: %s, fn: %s, createEmpty: %t)", every, fn, createEmpty)
-	client.QueryFlux.WriteString(aggregateWindowFlux)
+	var columnStr strings.Builder
+	for k, column := range columns {
+		if k != 0 {
+			columnStr.WriteString(", ")
+		}
+		columnStr.WriteString(fmt.Sprintf("\"%s\"", column))
+	}
+	flux := fmt.Sprintf("|> group(columns: [%s], mode: \"%s\")", columnStr.String(), mode)
+	client.QueryFlux.WriteString(flux)
+	return client
+}
+
+func (i *InfluxDBClient) Sort(columns []string) *InfluxDBClient {
+	client := i.getInstance()
+	var columnStr strings.Builder
+	for k, column := range columns {
+		if k != 0 {
+			columnStr.WriteString(", ")
+		}
+		columnStr.WriteString(fmt.Sprintf("\"%s\"", column))
+	}
+	flux := fmt.Sprintf("|> sort(columns: [%s])", columnStr.String())
+	client.QueryFlux.WriteString(flux)
 	return client
 }
 
@@ -166,24 +186,77 @@ func (i *InfluxDBClient) Limit(num int) *InfluxDBClient {
 	return client
 }
 
-func (i *InfluxDBClient) Fill(usePrevious bool) *InfluxDBClient {
+// AggregateWindow fn: mean,first,last...
+func (i *InfluxDBClient) AggregateWindow(every string, fn string, createEmpty bool) *InfluxDBClient {
 	client := i.getInstance()
-	fillFlux := fmt.Sprintf("|> fill(usePrevious: %t)", usePrevious)
-	client.QueryFlux.WriteString(fillFlux)
+	aggregateWindowFlux := fmt.Sprintf("|> aggregateWindow(every: %s, fn: %s, createEmpty: %t)", every, fn, createEmpty)
+	client.QueryFlux.WriteString(aggregateWindowFlux)
+	return client
+}
+
+func (i *InfluxDBClient) Increase() *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString("|> increase()")
+	return client
+}
+
+func (i *InfluxDBClient) MovingAverage(n int) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> movingAverage(n: %d)", n))
+	return client
+}
+
+func (i *InfluxDBClient) TimedMovingAverage(every string, period string) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> timedMovingAverage(every: %s, period: %s)", every, period))
+	return client
+}
+
+func (i *InfluxDBClient) Derivative(unit string, nonNegative bool) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> derivative(unit: %s, nonNegative: %t)", unit, nonNegative))
+	return client
+}
+
+func (i *InfluxDBClient) Rate(every string, unit string) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> aggregate.rate(every: %s,unit: %s)", every, unit))
+	return client
+}
+
+func (i *InfluxDBClient) FillWithPrevious(usePrevious bool) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> fill(usePrevious: %t)", usePrevious))
+	return client
+}
+
+func (i *InfluxDBClient) FillWithValue(value float64) *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString(fmt.Sprintf("|> fill(value: %.2f)", value))
+	return client
+}
+
+func (i *InfluxDBClient) Median() *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString("|> median()")
+	return client
+}
+
+func (i *InfluxDBClient) CumulativeSum() *InfluxDBClient {
+	client := i.getInstance()
+	client.QueryFlux.WriteString("|> cumulativeSum()")
 	return client
 }
 
 func (i *InfluxDBClient) First() *InfluxDBClient {
 	client := i.getInstance()
-	firstFlux := fmt.Sprintf("|> first()")
-	client.QueryFlux.WriteString(firstFlux)
+	client.QueryFlux.WriteString("|> first()")
 	return client
 }
 
 func (i *InfluxDBClient) Last() *InfluxDBClient {
 	client := i.getInstance()
-	lastFlux := fmt.Sprintf("|> last()")
-	client.QueryFlux.WriteString(lastFlux)
+	client.QueryFlux.WriteString("|> last()")
 	return client
 }
 

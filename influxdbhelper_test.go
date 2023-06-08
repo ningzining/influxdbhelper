@@ -24,10 +24,15 @@ func TestInfluxDBClient_Write(t *testing.T) {
 	year, month, day := time.Now().Date()
 	date := time.Date(year, month, day, 8, 0, 0, 0, time.Local)
 	floatValue := 20.33
-	for i := 0; i < 60; i++ {
+	for i := 0; i < 30; i++ {
 		client.Write("test_data", map[string]string{"imei": "123456", "iccid": "654321"}, map[string]interface{}{"speed": floatValue}, date).Flush()
 		date = date.Add(time.Minute)
 		floatValue += 1
+	}
+	for i := 0; i < 30; i++ {
+		client.Write("test_data", map[string]string{"imei": "123456", "iccid": "654321"}, map[string]interface{}{"speed": floatValue}, date).Flush()
+		date = date.Add(time.Minute)
+		floatValue -= 1
 	}
 }
 
@@ -46,6 +51,10 @@ func TestInfluxDBClient_Query(t *testing.T) {
 	start := startTime.Format("2006-01-02 15:04:05")
 	end := endTime.Format("2006-01-02 15:04:05")
 
+	var group []string
+	group = append(group, "imei")
+	var sort []string
+	sort = append(sort, "_value")
 	result, err := client.Debug().
 		FromBucket("test").
 		Range(start, end).
@@ -54,8 +63,8 @@ func TestInfluxDBClient_Query(t *testing.T) {
 		Tag("iccid", "654321").
 		Field("speed", "floatType").
 		AggregateWindow("1m", "last", false).
-		Fill(true).
-		Limit(100).
+		Group(group, "by").
+		Sort(sort).
 		Query()
 
 	if err != nil {
