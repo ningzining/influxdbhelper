@@ -16,6 +16,7 @@ type InfluxDBClient struct {
 	Client    influxdb2.Client
 	Writer    api.WriteAPI
 	Querier   api.QueryAPI
+	Deleter   api.DeleteAPI
 	QueryFlux strings.Builder
 	Err       error
 	IsDebug   bool
@@ -33,11 +34,13 @@ func Client(config InfluxDBConfig) *InfluxDBClient {
 	client := influxdb2.NewClient(config.Url, config.Token)
 	writer := client.WriteAPI(config.Org, config.Bucket)
 	query := client.QueryAPI(config.Org)
+	deleter := client.DeleteAPI()
 	influxdb := &InfluxDBClient{
 		Config:  config,
 		Client:  client,
 		Writer:  writer,
 		Querier: query,
+		Deleter: deleter,
 		clone:   1,
 	}
 	return influxdb
@@ -287,16 +290,23 @@ func (i *InfluxDBClient) QueryByCustomFlux(flux string) (result *api.QueryTableR
 	return
 }
 
+func (i *InfluxDBClient) DeleteWithName(ctx context.Context, start, stop time.Time, predicate string) error {
+	client := i.getInstance()
+	return client.Deleter.DeleteWithName(ctx, client.Config.Org, client.Config.Bucket, start, stop, predicate)
+}
+
 func (i *InfluxDBClient) getInstance() *InfluxDBClient {
 	if i.clone > 0 {
 		client := influxdb2.NewClient(i.Config.Url, i.Config.Token)
 		writer := client.WriteAPI(i.Config.Org, i.Config.Bucket)
 		query := client.QueryAPI(i.Config.Org)
+		deleter := client.DeleteAPI()
 		influxdb := &InfluxDBClient{
 			Config:  i.Config,
 			Client:  client,
 			Writer:  writer,
 			Querier: query,
+			Deleter: deleter,
 			clone:   0,
 		}
 		return influxdb

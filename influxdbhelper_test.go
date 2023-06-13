@@ -1,6 +1,7 @@
 package influxdbhelper
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -25,12 +26,12 @@ func TestInfluxDBClient_Write(t *testing.T) {
 	date := time.Date(year, month, day, 8, 0, 0, 0, time.Local)
 	floatValue := 20.33
 	for i := 0; i < 30; i++ {
-		client.Write("test_data", map[string]string{"imei": "123456", "iccid": "654321"}, map[string]interface{}{"speed": floatValue}, date).Flush()
+		client.Write("test_data", map[string]string{"imei": "123123", "iccid": "234234"}, map[string]interface{}{"speed": floatValue}, date).Flush()
 		date = date.Add(time.Minute)
 		floatValue += 1
 	}
 	for i := 0; i < 30; i++ {
-		client.Write("test_data", map[string]string{"imei": "123456", "iccid": "654321"}, map[string]interface{}{"speed": floatValue}, date).Flush()
+		client.Write("test_data", map[string]string{"imei": "123123", "iccid": "234234"}, map[string]interface{}{"speed": floatValue}, date).Flush()
 		date = date.Add(time.Minute)
 		floatValue -= 1
 	}
@@ -45,38 +46,48 @@ func TestInfluxDBClient_Query(t *testing.T) {
 	}
 	client := Client(config)
 
-	year, month, day := time.Now().Date()
-	startTime := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
-	endTime := time.Date(year, month, day, 59, 59, 59, 0, time.Local)
+	year, month, _ := time.Now().Date()
+	startTime := time.Date(year, month, 13, 0, 0, 0, 0, time.Local)
+	endTime := time.Date(year, month, 13, 23, 05, 0, 0, time.Local)
 	start := startTime.Format("2006-01-02 15:04:05")
 	end := endTime.Format("2006-01-02 15:04:05")
 
-	var group []string
-	group = append(group, "imei")
-	var sort []string
-	sort = append(sort, "_value")
 	result, err := client.Debug().
-		FromBucket("test").
+		FromBucket(bucket).
 		Range(start, end).
 		Measurement("test_data").
-		Tag("imei", "123456", "123345").
-		Tag("iccid", "654321").
-		Field("speed", "floatType").
-		AggregateWindow("1m", "last", false).
-		Group(group, "by").
-		Sort(sort).
+		Tag("imei", "123123").
+		Field("speed").
 		Query()
 
 	if err != nil {
 		fmt.Printf("%s\n", err)
 		return
 	}
-
+	m := make(map[interface{}]struct{})
 	for result.Next() {
 		record := result.Record()
 		field := record.Field()
 		value := record.Value()
 		ts := record.Time().Local()
+		m[value] = struct{}{}
 		fmt.Printf("field:%s, value:%v, ts:%s\n", field, value, ts)
 	}
+	fmt.Printf("map: %v\n", m)
+}
+
+func TestInfluxDbClient_Delete(t *testing.T) {
+	config := InfluxDBConfig{
+		Url:    url,
+		Token:  token,
+		Org:    org,
+		Bucket: bucket,
+	}
+	influxDBClient := Client(config)
+
+	start := time.Date(2023, 6, 13, 8, 0, 0, 0, time.Local)
+	stop := time.Date(2023, 6, 13, 8, 20, 0, 0, time.Local)
+	predicate := "_measurement=\"test_data\" AND imei=\"123123\""
+
+	influxDBClient.DeleteWithName(context.Background(), start, stop, predicate)
 }
