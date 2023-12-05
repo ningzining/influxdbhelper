@@ -13,12 +13,10 @@ import (
 
 type InfluxDBClient struct {
 	Config    InfluxDBConfig
-	Client    influxdb2.Client
 	Writer    api.WriteAPI
 	Querier   api.QueryAPI
 	Deleter   api.DeleteAPI
 	QueryFlux strings.Builder
-	Err       error
 	IsDebug   bool
 	clone     int
 }
@@ -32,23 +30,14 @@ type InfluxDBConfig struct {
 
 func Client(config InfluxDBConfig) *InfluxDBClient {
 	client := influxdb2.NewClient(config.Url, config.Token)
-	writer := client.WriteAPI(config.Org, config.Bucket)
-	query := client.QueryAPI(config.Org)
-	deleter := client.DeleteAPI()
 	influxdb := &InfluxDBClient{
 		Config:  config,
-		Client:  client,
-		Writer:  writer,
-		Querier: query,
-		Deleter: deleter,
+		Writer:  client.WriteAPI(config.Org, config.Bucket),
+		Querier: client.QueryAPI(config.Org),
+		Deleter: client.DeleteAPI(),
 		clone:   1,
 	}
 	return influxdb
-}
-
-func (i *InfluxDBClient) Error() error {
-	client := i.getInstance()
-	return client.Err
 }
 
 func (i *InfluxDBClient) Debug() *InfluxDBClient {
@@ -82,28 +71,16 @@ func (i *InfluxDBClient) FromBucket(bucket string) *InfluxDBClient {
 	return client
 }
 
-func (i *InfluxDBClient) Range(timeFrom string, timeTo string) *InfluxDBClient {
+func (i *InfluxDBClient) Range(timeFrom time.Time, timeTo time.Time) *InfluxDBClient {
 	client := i.getInstance()
-	timeFromParse, err := time.Parse(time.DateTime, timeFrom)
-	if err != nil {
-		client.Err = err
-		return client
-	}
-	timeToParse, err := time.Parse(time.DateTime, timeTo)
-	if err != nil {
-		client.Err = err
-		return client
-	}
-	start := timeFromParse.Format("2006-01-02T15:04:05+08:00")
-	end := timeToParse.Format("2006-01-02T15:04:05+08:00")
-	rangeFlux := fmt.Sprintf("|> range(start: %s ,stop: %s)", start, end)
+	rangeFlux := fmt.Sprintf("|> range(start: %s ,stop: %s)", timeFrom.Format(time.RFC3339), timeTo.Format(time.RFC3339))
 	client.QueryFlux.WriteString(rangeFlux)
 	return client
 }
 
-func (i *InfluxDBClient) RangeRecent(rangeTime string) *InfluxDBClient {
+func (i *InfluxDBClient) RangeRecent(rangeTime time.Time) *InfluxDBClient {
 	client := i.getInstance()
-	rangeFlux := fmt.Sprintf("|> range(start: %s)", rangeTime)
+	rangeFlux := fmt.Sprintf("|> range(start: %s)", rangeTime.Format(time.RFC3339))
 	client.QueryFlux.WriteString(rangeFlux)
 	return client
 }
@@ -269,25 +246,25 @@ func (i *InfluxDBClient) QueryFluxAppend(flux string) *InfluxDBClient {
 	return client
 }
 
-func (i *InfluxDBClient) Query() (result *api.QueryTableResult, err error) {
+func (i *InfluxDBClient) Query() (*api.QueryTableResult, error) {
 	client := i.getInstance()
 	if client.IsDebug {
 		log.Printf("%s\n", i.QueryFlux.String())
 	}
-	result, err = client.Querier.Query(context.Background(), client.QueryFlux.String())
+	result, err := client.Querier.Query(context.Background(), client.QueryFlux.String())
 	if err != nil {
-		return
+		return nil, err
 	}
-	return
+	return result, nil
 }
 
-func (i *InfluxDBClient) QueryByCustomFlux(flux string) (result *api.QueryTableResult, err error) {
+func (i *InfluxDBClient) QueryByCustomFlux(flux string) (*api.QueryTableResult, error) {
 	client := i.getInstance()
-	result, err = client.Querier.Query(context.Background(), flux)
+	result, err := client.Querier.Query(context.Background(), flux)
 	if err != nil {
-		return
+		return nil, err
 	}
-	return
+	return result, nil
 }
 
 func (i *InfluxDBClient) DeleteWithName(ctx context.Context, start, stop time.Time, predicate string) error {
@@ -298,15 +275,11 @@ func (i *InfluxDBClient) DeleteWithName(ctx context.Context, start, stop time.Ti
 func (i *InfluxDBClient) getInstance() *InfluxDBClient {
 	if i.clone > 0 {
 		client := influxdb2.NewClient(i.Config.Url, i.Config.Token)
-		writer := client.WriteAPI(i.Config.Org, i.Config.Bucket)
-		query := client.QueryAPI(i.Config.Org)
-		deleter := client.DeleteAPI()
 		influxdb := &InfluxDBClient{
 			Config:  i.Config,
-			Client:  client,
-			Writer:  writer,
-			Querier: query,
-			Deleter: deleter,
+			Writer:  client.WriteAPI(i.Config.Org, i.Config.Bucket),
+			Querier: client.QueryAPI(i.Config.Org),
+			Deleter: client.DeleteAPI(),
 			clone:   0,
 		}
 		return influxdb

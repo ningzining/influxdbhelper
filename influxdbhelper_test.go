@@ -46,15 +46,13 @@ func TestInfluxDBClient_Query(t *testing.T) {
 	}
 	client := Client(config)
 
-	year, month, _ := time.Now().Date()
-	startTime := time.Date(year, month, 13, 0, 0, 0, 0, time.Local)
-	endTime := time.Date(year, month, 13, 23, 05, 0, 0, time.Local)
-	start := startTime.Format("2006-01-02 15:04:05")
-	end := endTime.Format("2006-01-02 15:04:05")
+	year, month, day := time.Now().Date()
+	startTime := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+	endTime := time.Date(year, month, day, 23, 05, 0, 0, time.Local)
 
 	result, err := client.Debug().
 		FromBucket(bucket).
-		Range(start, end).
+		Range(startTime, endTime).
 		Measurement("test_data").
 		Tag("imei", "123123").
 		Field("speed").
